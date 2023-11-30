@@ -3,6 +3,19 @@ ESP32 headless acid combo of tb303 + tb303 + tr808 like synths. Filter cutoff, r
 All MIDI driven. 44100, 16bit stereo I2S output to the external DAC or 8bit to the built-in DAC. No indication. Uses both cores of ESP32. Cheap ~$10.
 Consult with midi_config.h to find out and to set up MIDI continous control messages.
 
+>>> This is only a TEST-Repo to check some functions with slightly different functionality
+a) Analog Multiplexer HC to add up to 8 Pots by using 3 GPIOs for Adresses
+b) Adding some Buttons to free ports
+c) MIDI-Sync
+d) Synth-Control (Instrument-Mute) via MIDI-Keyboard (MIDI-Notes)
+
+
+Don´t use this repo, please use the repo from COPYCH!!
+
+Best Regards
+Erich
+
+
 # It can be a JukeBox
 If you compile with #define JUKEBOX option in config.h, this becomes a stand-alone ACID-JUKE-BOX. You just listen.
 A modified version of http://tips.ibawizard.net/acid-banger/, initially taken from https://github.com/vitling/acid-banger included, there's no AI, but randomizing pattern algorithms.
