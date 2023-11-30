@@ -135,12 +135,12 @@ void AdcMul_Process(void)
 #endif
           switch(  page ){
             case 0:
-              // Synth 1 Synth-Sound
+              // Switch ADC !!!  Synth 1, Synth 2 etc... Synth-Sound
               switch( j ){
                 case 1:
                   // Cutoff
                   DEB("Change Cutoff\n");
-                  handleCC( SYNTH1_MIDI_CHAN, CC_303_CUTOFF,  adcChannelValue[j] );
+                  handleCC( SYNTH1_MIDI_CHAN , CC_303_CUTOFF,  adcChannelValue[j] );
                   break;
                 case 2:
                   // Reso
