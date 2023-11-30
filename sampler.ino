@@ -333,8 +333,61 @@ inline void Sampler::SetSoundPitch(float value) {
 }
 
 
-inline void Sampler::NoteOn( uint8_t note, uint8_t vol ) {
-
+inline void Sampler::NoteOn( uint8_t note, uint8_t vol ) {  
+  switch (note) {
+    case KICK_NOTE:
+      note=0;
+      break;
+    case SNARE_NOTE:
+      note=1;
+      break;
+    case CLOSED_HAT_NOTE:
+      note=7;
+      break;
+    case OPEN_HAT_NOTE:
+      note=8;
+      break;
+    case PERCUSSION_NOTE:
+      note=11;
+      break;
+    case CRASH_NOTE:
+      note=9;
+      break;
+    case 136: // External MIDI could Trigger by different Note-Numbers... we could support these..
+      note = 0;  // Kick
+      break;
+    case 138:
+      note = 1;  // Snare
+      break;
+    case 43:
+      note = 2; // Low Tom
+      break;
+    case 50:
+      note = 3; // High Tom
+      break;  
+    case 142:
+      note = 7; // Closed Hihat
+      break;
+    case 146:
+      note = 6;  // OpenHihat
+      break;
+    case 39:
+      note = 5;  // Clap
+      break;
+    case 175:
+      note = 4; // Rimshot
+      break;
+    case 67:
+      note = 11; // Maracas
+      break;      
+    case 149:
+      note = 9; // Crash
+      break;            
+    default:
+      // Statement(s)
+      break; 
+  }
+  
   /* check for null to avoid division by zero */
   if ( sampleInfoCount == 0 ) {
     return;
@@ -360,7 +413,7 @@ inline void Sampler::NoteOn( uint8_t note, uint8_t vol ) {
 #endif
 
 #ifdef DEBUG_MIDI
-  DEBF("note %d on volume %d\n", note, vol );
+ // DEBF("note %d on volume %d\n", note, vol );
  // DEBF("Filename: %s \n", samplePlayer[ j ].filename );
 #endif
   /*

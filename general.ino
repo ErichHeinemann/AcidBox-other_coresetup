@@ -16,7 +16,7 @@ static void synth2_generate() {
     } 
 }
 
-static void IRAM_ATTR mixer() { // sum buffers 
+static void mixer() { // sum buffers 
 #ifdef DEBUG_MASTER_OUT
   static float meter = 0.0f;
 #endif

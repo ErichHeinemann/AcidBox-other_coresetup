@@ -44,29 +44,57 @@
 // removed/modified buttons processing
 //
 
-#define KICK_NOTE               0 //001
-#define SNARE_NOTE              1 //002
-#define CLOSED_HAT_NOTE         CH_NUMBER //007
-#define OPEN_HAT_NOTE           OH_NUMBER //008
-#define PERCUSSION_NOTE         11 //005
-#define CRASH_NOTE              9 //010
+// Instrument Mute
+// bool mute_synth1 = false;
+// bool mute_synth2 = false;
+// bool mute_drums = false;
+/*
+// Special Drum Mutes
+bool mute_kick  = false;
+bool mute_snare = false;
+bool mute_hihat = false;
+bool mute_perc  = false;
+*/
+#define KICK_NOTE               36// 0 //36
+#define SNARE_NOTE              38//1 //38
+#define CLOSED_HAT_NOTE         CH_NUMBER //42
+#define OPEN_HAT_NOTE           OH_NUMBER //46
+#define PERCUSSION_NOTE         75// 11 //75 // Claves
+#define CRASH_NOTE              49 // 9 // 49
+
+// Sample:
+// #define KICK_NOTE               0 //001
+// #define SNARE_NOTE              1 //002
+// #define CLOSED_HAT_NOTE         CH_NUMBER //007
+// #define OPEN_HAT_NOTE           OH_NUMBER //008
+// #define PERCUSSION_NOTE         11 //005
+// #define CRASH_NOTE              9 //010
 
 // Pin numbers to which are buttons attached (connect one side of button to pin, the other to ground)
+// Replace function by menu and new hardware
 #define GEN_SYNTH1_BUTTON_PIN   23
 #define GEN_SYNTH2_BUTTON_PIN   23
 #define GEN_NOTES_BUTTON        23
 #define GEN_DRUM_BUTTON         23
-#define PLAY_BUTTON             0
+#define PLAY_BUTTON             32
 #define MEM1_BUTTON             23
 #define MEM2_BUTTON             23
 #define MEM3_BUTTON             23
 #define MEM4_BUTTON             23
 #define MEM5_BUTTON             23
 
+#define BREAK_BUTTON            33
+#define POTSMODE_BUTTON         35
+
 #define send_midi_start() {}
 #define send_midi_stop()  {}
 #define send_midi_tick() {}
  
+bool ext_midi_clock_master = false;
+
+void set_ext_midi_clock_master( bool new_ext_master ){
+   ext_midi_clock_master = new_ext_master;
+}
 
 #define NUM_RAMPS 6           // simultaneous knob rotatings
 #ifndef NO_PSRAM
@@ -157,12 +185,21 @@ struct sMidiRamp {
 } midiRamps[NUM_RAMPS];
 
 
+// would like to enable to select one of these random Pattern or a Custom Pattern.
+// Probably the selection could be done by enumeration or by buttons in a Key-Matrix.
+
 typedef enum drum_kinds {
   DrumBreak,
   DrumStraight,
   DrumHang,
   DrumAny,
-  DrumNone
+  DrumNone,
+  /*Anything below this line will never be picked  
+   */
+  DrumUser1,
+  DrumUser2,
+  DrumUser3
+   
 } drum_kinds ;
 
 enum {
@@ -171,6 +208,10 @@ enum {
   KickBigbeat,
   KickNone,
   /* anything bellow this line will never be picked */
+  KickUser1,
+  KickUser2,
+  KickUser3
+  
 };
 
 enum {
@@ -180,7 +221,11 @@ enum {
   SnareBreak,
   SnareStraight,
   SnareNone,
-  /* anything bellow this line will never be picked */
+  /* anything bellow this line will never be picked by Random */
+  SnareUser1,
+  SnareUser2,
+  SnareUser3
+   
 };
 
 enum {
@@ -189,7 +234,11 @@ enum {
   HatsPop,
   HatsPat1,
   HatsNone,
-  /* anything bellow this line will never be picked */
+  /* anything bellow this line will never be picked by Random*/
+  HatsUser1,
+  HatsUser2,
+  HatsUser3
+  
 };
 
 enum {
@@ -199,7 +248,11 @@ enum {
   PercEcho,
   PercRolls,
   PercNone,
-  /* anything bellow this line will never be picked */
+  /* anything bellow this line will never be picked by Random*/
+  PerUser1,
+  PerUser2,
+  PerUser3
+  
 };
 
 enum {
@@ -219,7 +272,8 @@ enum {
   ButNotes = 2,
   ButDrums = 3,
   ButPlay = 4,
-  ButMem1 = 5,
+  ButBreak = 5,
+  ButMem1 = 6,
   ButLast = ButMem1 + NumMemories,
 };
 
@@ -242,12 +296,18 @@ struct Instrument {
   void (*noteon)(byte chan, byte note, byte vel);
   void (*noteoff)(byte chan, byte note);
   byte playing_note;
+  bool muted;
 };
 
 static Instrument instruments[NumInstruments];
 
 static uint32_t bar_current = 0; // it counts bars
 
+// Function to toggle mute of this instrument
+void mute_instrument( byte instr ){
+  Instrument *ins = &instruments[instr];
+  ins->muted = ! (ins->muted);
+}
 
 struct sBreak {
   bStatus status = sIdle;
@@ -286,11 +346,12 @@ static const byte button_pins[ButLast] = {
   GEN_NOTES_BUTTON,
   GEN_DRUM_BUTTON,
   PLAY_BUTTON,
+  BREAK_BUTTON,
   MEM1_BUTTON,
   MEM2_BUTTON,
   MEM3_BUTTON,
   MEM4_BUTTON,
-  MEM5_BUTTON,
+  MEM5_BUTTON
 };
 
 
@@ -374,13 +435,14 @@ static inline uint16_t myRandom(uint16_t max) {
    Buttons
 */
 
-static void read_button(struct Button *button)
-{
-  if (button->numb == 5) { // start/stop is a real button "boot" ( GPIO0 )
+static void read_button(struct Button *button){
+  // DEBF("READ Button %d/r/n", button->numb );
+  // E.Heinemann, all Buttons are connected to GPIO-Pins
+  // if ( button->numb == 5) { // start/stop is a real button "boot" ( GPIO0 )
     button->history = (button->history << 1) | (digitalRead(button->pin) == HIGH);
-  } else {
-    button->history = 0;
-  }
+  //} else {
+  //  button->history = 0;
+  //}
 }
 
 static void init_button(struct Button *button, byte pin, uint8_t num)
@@ -434,14 +496,19 @@ static void instr_noteon_raw(byte instr, byte note, byte vol, byte do_glide) {
 static void instr_noteon(byte instr, byte value, byte do_glide, byte do_accent) {
   Instrument *ins = &instruments[instr];
 #ifdef DEBUG_JUKEBOX_
-  DEBF("glide=%d accent=%d\r\n", do_glide, do_accent);
+ // DEBF("glide=%d accent=%d\r\n", do_glide, do_accent);
 #endif
-  if (ins->is_drum) {
-    // For drums: value is volume, accent and glide are ignored
-    instr_noteon_raw(instr, current_drumkit + ins->drum_note, value, 0);
-  } else {
-    // For non-drums: value is note, volume is accent, glide is used
-    instr_noteon_raw(instr, value, do_accent ? AccentedMidiVol : NormalMidiVol, do_glide);
+  if ( ! ins->muted ){
+    if (ins->is_drum) {
+      // For drums: value is volume, accent and glide are ignored
+        // Das ist falsch, hier müssten die richtigen Noten eingesetzt werden!!
+        instr_noteon_raw(instr, current_drumkit + ins->drum_note, value, 0);
+        //DEB( current_drumkit + ins->drum_note );
+        //DEB("\r\n");
+    } else {
+      // For non-drums: value is note, volume is accent, glide is used
+      instr_noteon_raw(instr, value, do_accent ? AccentedMidiVol : NormalMidiVol, do_glide);
+    }
   }
 }
 
@@ -475,19 +542,21 @@ void sequencer_step(byte step) {
       //change drumkit
       current_drumkit = myRandom(((Drums.GetSamplesCount()-1)/12)) * 12 ;
       
-//#ifdef DEBUG_JUKEBOX
+#ifdef DEBUG_JUKEBOX
       DEBF("Selected drumkit: %d\r\n" , current_drumkit);
-//#endif
+#endif
     }
 #ifdef DEBUG_JUKEBOX
-    DEBUG("CRASH!!!!!!!!!!!!!!!!!!!!!");
+    DEBUG("Play CRASH!!!!!!!!!!!!!!!!!");
+    print_memory( cur_memory );
 #endif
+
 #ifdef MIDI_RAMPS
     check_midi_ramps(true);
 #endif
   }
   if (step % 4 == 0 || step == 1) {
-    digitalWrite(LED_BUILTIN, HIGH);
+    //digitalWrite(LED_BUILTIN, HIGH);
     #ifdef LOLIN_RGB
       pixels.setPixelColor(0, pixels.Color(rand() % 32, rand() % 32, rand() % 32));
       pixels.show();
@@ -497,7 +566,7 @@ void sequencer_step(byte step) {
     DEBUG(step);
 #endif
   }  else {
-    digitalWrite(LED_BUILTIN, LOW);
+    //digitalWrite(LED_BUILTIN, LOW);
     #ifdef LOLIN_RGB
       pixels.setPixelColor(0, pixels.Color(0,0,0));
       pixels.show();
@@ -529,9 +598,44 @@ static const int8_t *const offset_choices[] = {
   NOTE_LIST(0, 0, 0, 7, 12, 15, 17, 20, 24),
 };
 
+
+// Collect Note-Statistics to recognize the last nodes which were played by MIDI-IN
+// Derive a root-Note
+
+ // 4 notes
+ int  my_midi_notes[4]={ -1,-1,-1,-1 };
+
+ // 4 root notes
+ int  my_midi_rootnotes[4]={ -1,-1,-1,-1 };
+
+
+// register Midi Notes
+void regmidi_note( byte note_num ){
+  for ( uint8_t i = 3; i > 0; i-- ){
+
+    // Check if note is already registered
+    // tdb
+
+    // shift notes like Pete Midi
+    my_midi_notes[i]=  (my_midi_notes[i-1]);    
+    my_midi_rootnotes[i]= (my_midi_rootnotes[i-1]);
+    
+    DEBF("CTRL-Note-Statistics %d %d \r\n", my_midi_notes[i], i);  
+  }  
+  my_midi_notes[0]= note_num;    
+    DEBF("CTRL-Note-Statistics %d %d \r\n", my_midi_notes[0], 0);  
+  my_midi_rootnotes[0]= note_num%12 + 12; // don´t use the lowest Octave ... perehaps +12 or +24 is good.    
+}
+
+
 static byte generate_note_set(uint8_t *note_set) {
+
   // Random root note
   byte root = myRandom(15) + 28;
+
+  if( my_midi_notes[0] != -1 ){
+     root =  my_midi_notes[0];
+  }
 
   // Random note set
   byte set = myRandom(ARRAY_SIZE(offset_choices));
@@ -542,9 +646,13 @@ static byte generate_note_set(uint8_t *note_set) {
     int8_t note = offset_choices[set][i];
     if (note < 0)
       break;
-    *note_set++ = root + note;
+    if( i < 4 &&  my_midi_notes[i] != -1 ){
+      *note_set++ = my_midi_notes[i]; // so I only copy the first 4 steps into the set ... 
+    }else{
+      *note_set++ = root + note;
+    }  
   }
-
+  
   return i;
 }
 
@@ -820,7 +928,7 @@ void mem_generate_melody(byte mem, byte voice) {
   // identical melody.
   uint16_t random_state = myRandomState;
   myRandomState = (m->random_seed << 1) ^ voice;
-#ifdef DEBUG_JUKEBOX_
+#ifdef DEBUG_JUKEBOX
   DEBF("generating %d/%d with seed %u \r\n", mem, voice, myRandomState);
 #endif
   generate_melody(
@@ -866,10 +974,15 @@ void mem_generate_all(byte mem) {
 
 void print_pattern(struct Pattern *p, byte is_drum) {
 #ifdef DEBUG_JUKEBOX
+
+  if( is_drum ){
+    DEB("Drum Pattern:\r\n");
+  }  
   for (int i = 0; i < PatternLength; i++)
     DEBF("%3d ", p->notes[i]);
 
   if (!is_drum) {
+    DEB("No Drum-Pattern:");
     for (int i = 0; i < PatternLength; i++)
       DEBF(" %c%c \r\n", (p->accent & (1u << i)) ? 'A' : ' ', (p->glide & (1u << i)) ? '~' : ' ');
   }
@@ -886,8 +999,10 @@ void print_memory(byte mem) {
 #ifdef DEBUG_JUKEBOX
     DEBF(" %d", m->note_set[i]);
 #endif
-  for (int i = 0; i < NumInstruments; i++)
+  for (int i = 0; i < NumInstruments; i++){
+    DEBF(" Instrument: %d \r\n",  i ); 
     print_pattern(&m->patterns[i], instruments[i].is_drum);
+  }
 }
 
 void init_patterns() {
@@ -903,11 +1018,24 @@ void init_patterns() {
 
 static byte midi_playing, midi_tick, midi_step;
 const float tick_coef = 1000ul * 15 / MIDI_TICKS_PER_16TH;
+
 static unsigned long midi_tick_ms = tick_coef / bpm;
 
-inline void set_bpm(float newBpm) {
+inline void set_bpm(float newBpm){
   bpm = newBpm;
   midi_tick_ms = tick_coef / newBpm;
+}
+
+static void set_midi_tick_ms( unsigned long new_tick_ms ) {
+  midi_tick_ms = new_tick_ms;
+}
+
+static void do_break(){
+    DEB("***************************************************************************************************************************");  
+    Break.status = sPlaying;
+    Break.start = bar_current;
+    Break.length = 2;
+    Break.after = Break.start + Break.length;  
 }
 
 static void decide_on_break() {
@@ -979,7 +1107,7 @@ static void decide_on_break() {
     }
     if (Break.start == bar_current ) mem_generate_drums(cur_memory, DrumBreak);
   } else { // Break.status != sIdle
-    if (Break.after == bar_current) {
+    if (Break.after >= bar_current) {
       Break.status = sIdle;
       mem_generate_drums(cur_memory, DrumStraight);
       if (flip(10)) mem_generate_drums(cur_memory, DrumHang);
@@ -1042,7 +1170,7 @@ static void do_midi_ramps() {
     }
     uint8_t val = (uint8_t)(midiRamps[i].value);
     send_midi_control(midiRamps[i].chan,  midiRamps[i].cc_number, val);
-#ifdef DEBUG_JUKEBOX
+#ifdef DEBUG_JUKEBOX_
     DEBF("ramp: %d  chan: %d  cc: %d = %d \r\n", i, midiRamps[i].chan, midiRamps[i].cc_number, val);
 #endif
   }
@@ -1126,7 +1254,9 @@ static void check_midi_ramps(boolean force_restart) {
 }
 
 static void do_midi_tick() {
-  send_midi_tick();
+  if( ext_midi_clock_master == false ){
+    send_midi_tick();
+  }  
   midi_tick++;
   if (midi_tick >= MIDI_TICKS_PER_16TH) {
     midi_tick = 0;
@@ -1139,6 +1269,7 @@ static void do_midi_tick() {
     }
     sequencer_step(midi_step);
   }
+  //}
 }
 
 static void do_midi_stop() {
@@ -1163,6 +1294,7 @@ static void init_instruments() {
     ins->is_drum = 0;
     ins->noteon = send_midi_noteon;
     ins->noteoff = send_midi_noteoff;
+    ins->muted = false;
     ins++;
   }
 
@@ -1173,6 +1305,7 @@ static void init_instruments() {
     ins->drum_note = drum_notes[i];
     ins->noteon = send_midi_noteon;
     ins->noteoff = send_midi_noteoff;
+    ins->muted = false;
     ins++;
   }
 }
@@ -1224,7 +1357,7 @@ void run_ui() {
   }
 
   // Handle pattern generation
-  if (just_pressed(ButPat1)) {
+  if( just_pressed(ButPat1) ){
     mem_generate_melody_and_seed(cur_memory, 0);
     print_memory(cur_memory);
   }
@@ -1252,10 +1385,16 @@ void run_ui() {
 #ifdef DEBUG_JUKEBOX
       DEBF("starting midi clock, dt=%lu", midi_tick_ms);
 #endif
-      last_midi_tick = now;
+      last_midi_tick = now - midi_tick_ms;
+      ext_midi_clock_master = false;
       do_midi_start();
       do_midi_tick();
     }
+  }
+  
+  // Handle Break
+  if (just_pressed(ButBreak)) {
+    do_break();  
   }
 }
 
@@ -1265,15 +1404,14 @@ void run_tick() {
   button_divider++;
   if (button_divider >= 4) {
     for (int i = 0; i < ButLast; i++) {
-      read_button(&buttons[i]);
+      read_button( &buttons[i] );
     }
     run_ui();
     button_divider = 0;
-    
   }
 
   /* If MIDI is playing, then check for tick */
-  if (midi_playing && (now - last_midi_tick) >= midi_tick_ms) {
+  if ( ext_midi_clock_master==false && midi_playing && (now - last_midi_tick) >= midi_tick_ms   ) {
     do_midi_tick();
     last_midi_tick += midi_tick_ms;
     if (last_midi_tick < now) {
